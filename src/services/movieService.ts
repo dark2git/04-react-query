@@ -3,7 +3,7 @@ import type { Movie } from "../types/movie";
 
 const BASE_URL = "https://api.themoviedb.org/3";
 
-interface FetchMoviesResponse {
+export interface FetchMoviesResponse {
   results: Movie[];
   total_pages: number;
 }
