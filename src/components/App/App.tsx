@@ -1,40 +1,32 @@
-
 import toast from "react-hot-toast";
 import { fetchMovies } from "../../services/movieService";
+import type { FetchMoviesResponse } from "../../services/movieService";
 import type { Movie } from "../../types/movie";
-import css from "./App.module.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import SearchBar from "../SearchBar/SearchBar";
 import Loader from "../Loader/Loader";
 import ErrorMessage from "../ErrorMessage/ErrorMessage";
 import MovieGrid from "../MovieGrid/MovieGrid";
 import MovieModal from "../MovieModal/MovieModal";
+import ReactPaginate from "react-paginate";
+import css from "./App.module.css";
 
 export default function App() {
-  const [movies, setMovies] = useState<Movie[]>([]);
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasError, setHasError] = useState(false);
 
-  const handleSearch = async (query: string) => {
-    try {
-      setIsLoading(true);
-      setHasError(false);
-      setMovies([]);
+  const { data, isLoading, isError } = useQuery<FetchMoviesResponse>({
+    queryKey: ["movies", query, page],
+    queryFn: () => fetchMovies(query, page),
+    enabled: query !== "",
+    placeholderData: keepPreviousData,
+  });
 
-      const results = await fetchMovies(query);
-
-      if (results.length === 0) {
-        toast.error("No movies found for your request.");
-      }
-
-      setMovies(results);
-    } catch (error) {
-      setHasError(true);
-      console.error("Error fetching movies:", error);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleSearch = (newQuery: string) => {
+    setQuery(newQuery);
+    setPage(1);
   };
 
   const handleSelectMovie = (movie: Movie) => {
@@ -45,18 +37,40 @@ export default function App() {
     setSelectedMovie(null);
   };
 
+  useEffect(() => {
+    if (!isLoading && !isError && query && data && data.results.length === 0) {
+      toast.error("No movies found for your request.");
+    }
+  }, [data, isLoading, isError, query]);
+
   return (
-    <div className={css.app}>
+    <>
       <SearchBar onSubmit={handleSearch} />
 
       {isLoading && <Loader />}
-      {hasError && <ErrorMessage />}
-      {!isLoading && !hasError && (
-        <MovieGrid movies={movies} onSelect={handleSelectMovie} />
+      {isError && <ErrorMessage />}
+
+      {!isLoading && !isError && data && (
+        <>
+          {data.total_pages > 1 && (
+            <ReactPaginate
+              pageCount={data.total_pages}
+              pageRangeDisplayed={5}
+              marginPagesDisplayed={1}
+              onPageChange={({ selected }) => setPage(selected + 1)}
+              forcePage={page - 1}
+              containerClassName={css.pagination}
+              activeClassName={css.active}
+              nextLabel="→"
+              previousLabel="←"
+            />
+          )}
+          <MovieGrid movies={data.results} onSelect={handleSelectMovie} />
+        </>
       )}
       {selectedMovie && (
         <MovieModal movie={selectedMovie} onClose={handleCloseModal} />
       )}
-    </div>
+    </>
   );
 }
